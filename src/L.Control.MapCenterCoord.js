@@ -1,10 +1,68 @@
+// from https://stackoverflow.com/a/30810322/495415
+
+function copyTextToClipboard(text) {
+  var textArea = document.createElement("textarea");
+
+  //
+  // *** This styling is an extra step which is likely not required. ***
+  //
+  // Why is it here? To ensure:
+  // 1. the element is able to have focus and selection.
+  // 2. if element was to flash render it has minimal visual impact.
+  // 3. less flakyness with selection and copying which **might** occur if
+  //    the textarea element is not visible.
+  //
+  // The likelihood is the element won't even render, not even a flash,
+  // so some of these are just precautions. However in IE the element
+  // is visible whilst the popup box asking the user for permission for
+  // the web page to copy to the clipboard.
+  //
+
+  // Place in top-left corner of screen regardless of scroll position.
+  textArea.style.position = 'fixed';
+  textArea.style.top = 0;
+  textArea.style.left = 0;
+
+  // Ensure it has a small width and height. Setting to 1px / 1em
+  // doesn't work as this gives a negative w/h on some browsers.
+  textArea.style.width = '2em';
+  textArea.style.height = '2em';
+
+  // We don't need padding, reducing the size if it does flash render.
+  textArea.style.padding = 0;
+
+  // Clean up any borders.
+  textArea.style.border = 'none';
+  textArea.style.outline = 'none';
+  textArea.style.boxShadow = 'none';
+
+  // Avoid flash of white box if rendered for any reason.
+  textArea.style.background = 'transparent';
+
+
+  textArea.value = text;
+
+  document.body.appendChild(textArea);
+
+  textArea.select();
+
+  try {
+    var successful = document.execCommand('copy');
+  } catch (err) {
+    console.log('Oops, unable to copy', err);
+  }
+
+  document.body.removeChild(textArea);
+}
+
+
 L.Control.MapCenterCoord = L.Control.extend({
   // Defaults
   options: {
     position: 'bottomleft',
     icon: true,
     onMove: false,
-    template: '{y} | {x}', // https://en.wikipedia.org/wiki/ISO_6709
+    template: '{y}, {x}', // https://en.wikipedia.org/wiki/ISO_6709
     projected: false,
     formatProjected: '#.##0,000',
     latlngFormat: 'DD', // DD, DM, DMS
@@ -27,10 +85,19 @@ L.Control.MapCenterCoord = L.Control.extend({
     this._container = L.DomUtil.create('div', 'leaflet-control-mapcentercoord');
     L.DomEvent.disableClickPropagation(this._container);
 
+    // copy lat/long to clipboard on click
+    function copyLatLongToClipboard (event) {
+      var center = this._map.getCenter();
+      coord_str = center.lat + ", " + center.lng;
+      copyTextToClipboard(coord_str);
+    };
+    L.DomEvent.on(this._container, 'click', copyLatLongToClipboard, this);
+
     // Add events listeners for updating coordinates & icon's position
     map.on('move', this._onMapMove, this);
     map.on('moveend', this._onMapMoveEnd, this);
 
+    this._container.title = "Click to copy center point coordinates."
     this._container.innerHTML = this._getMapCenterCoord();
     return this._container;
   },
@@ -115,7 +182,7 @@ L.Control.MapCenterCoord = L.Control.extend({
     // format
     if (this.options.latlngFormat === 'DM') {
       deg = parseInt(centerCopy.lng);
-      lng = deg + 'º ' + this._format('00.000', (centerCopy.lng - deg) * 60) + "'";
+      lng = deg + '&deg; ' + this._format('00.000', (centerCopy.lng - deg) * 60) + "'";
       deg = parseInt(centerCopy.lat);
       lat = deg + 'º ' + this._format('00.000', (centerCopy.lat - deg) * 60) + "'";
     } else if (this.options.latlngFormat === 'DMS') {
@@ -124,10 +191,10 @@ L.Control.MapCenterCoord = L.Control.extend({
       lng = deg + 'º ' + this._format('00', parseInt(min)) + "' " + this._format('00.0', (min - parseInt(min)) * 60) + "''";
       deg = parseInt(centerCopy.lat);
       min = (centerCopy.lat - deg) * 60;
-      lat = deg + 'º ' + this._format('00', parseInt(min)) + "' " + this._format('00.0', (min - parseInt(min)) * 60) + "''";
+      lat = deg + '&deg; ' + this._format('00', parseInt(min)) + "' " + this._format('00.0', (min - parseInt(min)) * 60) + "''";
     } else { // 'DD'
-      lng = this._format('#0.00000', centerCopy.lng) + 'º';
-      lat = this._format('##0.00000', centerCopy.lat) + 'º';
+      lng = this._format('#0.00000', centerCopy.lng) + '&deg; ';
+      lat = this._format('##0.00000', centerCopy.lat) + '&deg; ';
     }
 
     return L.Util.template(this.options.template, {
